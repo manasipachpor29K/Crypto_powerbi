@@ -3,19 +3,20 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# ---------------------------------------------------
+# ----------------------------------------
 # PAGE CONFIG
-# ---------------------------------------------------
+# ----------------------------------------
 
 st.set_page_config(
-    page_title="Crypto Analytics Dashboard",
-    page_icon="📊",
+    page_title="Crypto Dashboard",
     layout="wide"
 )
 
-# ---------------------------------------------------
+st.title("📊 Crypto Analytics Dashboard")
+
+# ----------------------------------------
 # LOAD DATA
-# ---------------------------------------------------
+# ----------------------------------------
 
 @st.cache_data
 def load_data():
@@ -24,393 +25,211 @@ def load_data():
     sentiment = pd.read_csv("Sentiment_2026.csv")
     stacked = pd.read_csv("Stacked2026.csv")
 
-    # Convert Date Columns
-    for df in [crypto, sentiment, stacked]:
-
-        for col in df.columns:
-
-            if "date" in col.lower():
-
-                try:
-                    df[col] = pd.to_datetime(df[col])
-                except:
-                    pass
-
     return crypto, sentiment, stacked
 
 
 crypto, sentiment, stacked = load_data()
 
-# ---------------------------------------------------
-# SIDEBAR
-# ---------------------------------------------------
+# ----------------------------------------
+# CLEAN COLUMN NAMES
+# ----------------------------------------
 
-st.sidebar.title("📌 Crypto Dashboard")
+crypto.columns = crypto.columns.str.strip()
+sentiment.columns = sentiment.columns.str.strip()
+stacked.columns = stacked.columns.str.strip()
 
-page = st.sidebar.radio(
-    "Navigation",
-    [
-        "Executive Overview",
-        "Price Explorer",
-        "Forecasting",
-        "Risk & Volatility",
-        "Forecast Insights",
-        "Sentiment Analysis",
-        "Market Correlation",
-        "Feature Explainability",
-        "Forecast Comparison",
-        "Key Influencers",
-        "Strategy Backtest",
-        "Interactive Explorer"
-    ]
-)
+# ----------------------------------------
+# AUTO DETECT COLUMNS
+# ----------------------------------------
 
-# ---------------------------------------------------
-# FILTERS
-# ---------------------------------------------------
+date_col = None
+close_col = None
+open_col = None
+high_col = None
+low_col = None
+volume_col = None
+ticker_col = None
 
-filtered_crypto = crypto.copy()
+for col in crypto.columns:
 
-if "Ticker" in crypto.columns:
+    c = col.lower()
 
-    ticker = st.sidebar.multiselect(
+    if "date" in c:
+        date_col = col
+
+    elif "close" in c:
+        close_col = col
+
+    elif "open" in c:
+        open_col = col
+
+    elif "high" in c:
+        high_col = col
+
+    elif "low" in c:
+        low_col = col
+
+    elif "volume" in c:
+        volume_col = col
+
+    elif "ticker" in c:
+        ticker_col = col
+
+# ----------------------------------------
+# DATE CONVERT
+# ----------------------------------------
+
+if date_col:
+    crypto[date_col] = pd.to_datetime(
+        crypto[date_col],
+        errors="coerce"
+    )
+
+# ----------------------------------------
+# SIDEBAR FILTER
+# ----------------------------------------
+
+filtered_df = crypto.copy()
+
+if ticker_col:
+
+    tickers = st.sidebar.multiselect(
         "Select Ticker",
-        options=sorted(crypto["Ticker"].dropna().unique()),
-        default=sorted(crypto["Ticker"].dropna().unique())
+        options=crypto[ticker_col].dropna().unique(),
+        default=crypto[ticker_col].dropna().unique()
     )
 
-    filtered_crypto = filtered_crypto[
-        filtered_crypto["Ticker"].isin(ticker)
+    filtered_df = filtered_df[
+        filtered_df[ticker_col].isin(tickers)
     ]
 
-if "Market_Type" in crypto.columns:
+# ----------------------------------------
+# KPI CARDS
+# ----------------------------------------
 
-    market = st.sidebar.multiselect(
-        "Market Type",
-        options=sorted(crypto["Market_Type"].dropna().unique()),
-        default=sorted(crypto["Market_Type"].dropna().unique())
+st.subheader("📌 KPIs")
+
+c1, c2, c3 = st.columns(3)
+
+if high_col:
+    c1.metric(
+        "Highest Price",
+        round(filtered_df[high_col].max(), 2)
     )
 
-    filtered_crypto = filtered_crypto[
-        filtered_crypto["Market_Type"].isin(market)
-    ]
-
-if "Category" in crypto.columns:
-
-    category = st.sidebar.multiselect(
-        "Category",
-        options=sorted(crypto["Category"].dropna().unique()),
-        default=sorted(crypto["Category"].dropna().unique())
+if low_col:
+    c2.metric(
+        "Lowest Price",
+        round(filtered_df[low_col].min(), 2)
     )
 
-    filtered_crypto = filtered_crypto[
-        filtered_crypto["Category"].isin(category)
-    ]
-
-# ---------------------------------------------------
-# PAGE 1 — EXECUTIVE OVERVIEW
-# ---------------------------------------------------
-
-if page == "Executive Overview":
-
-    st.title("📈 Executive Overview")
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    if "High" in filtered_crypto.columns:
-        c1.metric(
-            "Highest Peak Price",
-            f"{filtered_crypto['High'].max():,.2f}"
-        )
-
-    if "Close" in filtered_crypto.columns:
-        c2.metric(
-            "Latest Close Price",
-            f"{filtered_crypto['Close'].iloc[-1]:,.2f}"
-        )
-
-    if "Ticker" in filtered_crypto.columns:
-        c3.metric(
-            "Most Volatile Ticker",
-            filtered_crypto["Ticker"].mode()[0]
-        )
-
-    if "Close" in filtered_crypto.columns:
-        c4.metric(
-            "Average Close",
-            f"{filtered_crypto['Close'].mean():,.2f}"
-        )
-
-    if "Date" in filtered_crypto.columns:
-
-        fig = px.line(
-            filtered_crypto,
-            x="Date",
-            y="Close",
-            color="Ticker",
-            title="Average Close Price Over Time"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-# ---------------------------------------------------
-# PAGE 2 — PRICE EXPLORER
-# ---------------------------------------------------
-
-elif page == "Price Explorer":
-
-    st.title("📊 Price Explorer")
-
-    required_cols = [
-        "Date",
-        "Open",
-        "High",
-        "Low",
-        "Close"
-    ]
-
-    if all(col in filtered_crypto.columns for col in required_cols):
-
-        fig = go.Figure(data=[go.Candlestick(
-            x=filtered_crypto["Date"],
-            open=filtered_crypto["Open"],
-            high=filtered_crypto["High"],
-            low=filtered_crypto["Low"],
-            close=filtered_crypto["Close"]
-        )])
-
-        fig.update_layout(
-            title="Candlestick Chart",
-            xaxis_rangeslider_visible=False
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-    if "Volume" in filtered_crypto.columns:
-
-        fig2 = px.bar(
-            filtered_crypto,
-            x="Date",
-            y="Volume",
-            color="Ticker",
-            title="Trading Volume"
-        )
-
-        st.plotly_chart(fig2, use_container_width=True)
-
-# ---------------------------------------------------
-# PAGE 3 — FORECASTING
-# ---------------------------------------------------
-
-elif page == "Forecasting":
-
-    st.title("🔮 Forecasting Dashboard")
-
-    if "Forecast" in stacked.columns:
-
-        if "Model" in stacked.columns:
-
-            model = st.sidebar.multiselect(
-                "Forecast Models",
-                options=stacked["Model"].unique(),
-                default=stacked["Model"].unique()
-            )
-
-            filtered_stack = stacked[
-                stacked["Model"].isin(model)
-            ]
-
-        else:
-            filtered_stack = stacked
-
-        fig = px.line(
-            filtered_stack,
-            x=filtered_stack.columns[0],
-            y="Forecast",
-            color="Model" if "Model" in filtered_stack.columns else None,
-            title="Forecast Comparison"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-# ---------------------------------------------------
-# PAGE 4 — RISK & VOLATILITY
-# ---------------------------------------------------
-
-elif page == "Risk & Volatility":
-
-    st.title("⚠ Risk & Volatility")
-
-    if "Volatility" in filtered_crypto.columns:
-
-        fig = px.line(
-            filtered_crypto,
-            x="Date",
-            y="Volatility",
-            color="Ticker",
-            title="Volatility Trend"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-# ---------------------------------------------------
-# PAGE 5 — FORECAST INSIGHTS
-# ---------------------------------------------------
-
-elif page == "Forecast Insights":
-
-    st.title("📌 Forecast Insights")
-
-    if "Forecast" in stacked.columns:
-
-        fig = px.area(
-            stacked,
-            x=stacked.columns[0],
-            y="Forecast",
-            title="Forecast Growth"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-# ---------------------------------------------------
-# PAGE 6 — SENTIMENT ANALYSIS
-# ---------------------------------------------------
-
-elif page == "Sentiment Analysis":
-
-    st.title("📰 Sentiment Analysis")
-
-    if "Sentiment" in sentiment.columns:
-
-        fig = px.histogram(
-            sentiment,
-            x="Sentiment",
-            color="ImpactLevel" if "ImpactLevel" in sentiment.columns else None,
-            title="Sentiment Distribution"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-    if "source" in sentiment.columns:
-
-        y_col = (
-            "NewsImpact"
-            if "NewsImpact" in sentiment.columns
-            else sentiment.columns[1]
-        )
-
-        fig2 = px.bar(
-            sentiment,
-            x="source",
-            y=y_col,
-            title="News Impact by Source"
-        )
-
-        st.plotly_chart(fig2, use_container_width=True)
-
-# ---------------------------------------------------
-# PAGE 7 — MARKET CORRELATION
-# ---------------------------------------------------
-
-elif page == "Market Correlation":
-
-    st.title("🔗 Market Correlation")
-
-    numeric_df = filtered_crypto.select_dtypes(include="number")
-
-    corr = numeric_df.corr()
-
-    fig = px.imshow(
-        corr,
-        text_auto=True,
-        title="Correlation Heatmap"
+if close_col:
+    c3.metric(
+        "Average Close",
+        round(filtered_df[close_col].mean(), 2)
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+# ----------------------------------------
+# LINE CHART
+# ----------------------------------------
 
-# ---------------------------------------------------
-# PAGE 8 — FEATURE EXPLAINABILITY
-# ---------------------------------------------------
+st.subheader("📈 Price Trend")
 
-elif page == "Feature Explainability":
+if date_col and close_col:
 
-    st.title("📌 Feature Explainability")
+    fig = px.line(
+        filtered_df,
+        x=date_col,
+        y=close_col,
+        color=ticker_col if ticker_col else None,
+        title="Close Price Trend"
+    )
 
-    if "Volume" in filtered_crypto.columns:
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
-        fig = px.scatter(
-            filtered_crypto,
-            x="Volume",
-            y="Close",
-            color="Ticker",
-            title="Close vs Volume"
-        )
+# ----------------------------------------
+# CANDLESTICK CHART
+# ----------------------------------------
 
-        st.plotly_chart(fig, use_container_width=True)
+st.subheader("🕯 Candlestick Chart")
 
-# ---------------------------------------------------
-# PAGE 9 — FORECAST COMPARISON
-# ---------------------------------------------------
+required = [
+    date_col,
+    open_col,
+    high_col,
+    low_col,
+    close_col
+]
 
-elif page == "Forecast Comparison":
+if all(required):
 
-    st.title("📊 Forecast Comparison")
+    fig2 = go.Figure(data=[go.Candlestick(
+        x=filtered_df[date_col],
+        open=filtered_df[open_col],
+        high=filtered_df[high_col],
+        low=filtered_df[low_col],
+        close=filtered_df[close_col]
+    )])
 
-    if "Forecast" in stacked.columns:
+    fig2.update_layout(
+        xaxis_rangeslider_visible=False
+    )
 
-        fig = px.line(
-            stacked,
-            x=stacked.columns[0],
-            y="Forecast",
-            color="Model" if "Model" in stacked.columns else None,
-            title="Forecast Models"
-        )
+    st.plotly_chart(
+        fig2,
+        use_container_width=True
+    )
 
-        st.plotly_chart(fig, use_container_width=True)
+# ----------------------------------------
+# VOLUME CHART
+# ----------------------------------------
 
-# ---------------------------------------------------
-# PAGE 10 — KEY INFLUENCERS
-# ---------------------------------------------------
+st.subheader("📊 Trading Volume")
 
-elif page == "Key Influencers":
+if volume_col and date_col:
 
-    st.title("⭐ Key Influencers")
+    fig3 = px.bar(
+        filtered_df,
+        x=date_col,
+        y=volume_col,
+        color=ticker_col if ticker_col else None,
+        title="Volume Analysis"
+    )
 
-    st.dataframe(filtered_crypto.describe())
+    st.plotly_chart(
+        fig3,
+        use_container_width=True
+    )
 
-# ---------------------------------------------------
-# PAGE 11 — STRATEGY BACKTEST
-# ---------------------------------------------------
+# ----------------------------------------
+# SENTIMENT ANALYSIS
+# ----------------------------------------
 
-elif page == "Strategy Backtest":
+st.subheader("📰 Sentiment Analysis")
 
-    st.title("📈 Strategy Backtest")
+if "Sentiment" in sentiment.columns:
 
-    if "Daily_Return" in filtered_crypto.columns:
+    fig4 = px.histogram(
+        sentiment,
+        x="Sentiment",
+        color="ImpactLevel"
+        if "ImpactLevel" in sentiment.columns
+        else None,
+        title="Sentiment Distribution"
+    )
 
-        fig = px.line(
-            filtered_crypto,
-            x="Date",
-            y="Daily_Return",
-            color="Ticker",
-            title="Daily Return Analysis"
-        )
+    st.plotly_chart(
+        fig4,
+        use_container_width=True
+    )
 
-        st.plotly_chart(fig, use_container_width=True)
+# ----------------------------------------
+# RAW DATA
+# ----------------------------------------
 
-# ---------------------------------------------------
-# PAGE 12 — INTERACTIVE EXPLORER
-# ---------------------------------------------------
+st.subheader("📄 Dataset")
 
-elif page == "Interactive Explorer":
-
-    st.title("🎯 Interactive Explorer")
-
-    st.dataframe(filtered_crypto)
-
-# ---------------------------------------------------
-# FOOTER
-# ---------------------------------------------------
-
-st.sidebar.markdown("---")
-st.sidebar.success("Power BI Clone using Streamlit")
+st.dataframe(filtered_df)
