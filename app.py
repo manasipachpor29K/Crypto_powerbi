@@ -1,273 +1,407 @@
 # app.py
 
+```python
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 
-# -----------------------------------
+# -------------------------------------------------
 # PAGE CONFIG
-# -----------------------------------
+# -------------------------------------------------
 
 st.set_page_config(
-    page_title="Power BI Dashboard Clone",
-    page_icon="📊",
-    layout="wide"
+    page_title="Crypto Analytics Dashboard",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# -----------------------------------
-# SIDEBAR
-# -----------------------------------
+# -------------------------------------------------
+# LOAD DATA
+# -------------------------------------------------
 
-st.sidebar.title("📌 Navigation")
+@st.cache_data
+
+def load_data():
+    crypto = pd.read_csv("Cryptofile.csv")
+    sentiment = pd.read_csv("Sentiment_2026.csv")
+    stacked = pd.read_csv("Stacked2026.csv")
+
+    if 'Date' in crypto.columns:
+        crypto['Date'] = pd.to_datetime(crypto['Date'])
+
+    return crypto, sentiment, stacked
+
+crypto, sentiment, stacked = load_data()
+
+# -------------------------------------------------
+# SIDEBAR FILTERS
+# -------------------------------------------------
+
+st.sidebar.title("📊 Crypto Dashboard")
+
+if 'Ticker' in crypto.columns:
+    selected_ticker = st.sidebar.multiselect(
+        "Select Ticker",
+        crypto['Ticker'].dropna().unique(),
+        default=crypto['Ticker'].dropna().unique()
+    )
+
+    crypto = crypto[crypto['Ticker'].isin(selected_ticker)]
+
+if 'Market_Type' in crypto.columns:
+    selected_market = st.sidebar.multiselect(
+        "Select Market Type",
+        crypto['Market_Type'].dropna().unique(),
+        default=crypto['Market_Type'].dropna().unique()
+    )
+
+    crypto = crypto[crypto['Market_Type'].isin(selected_market)]
+
+if 'Category' in crypto.columns:
+    selected_category = st.sidebar.multiselect(
+        "Select Category",
+        crypto['Category'].dropna().unique(),
+        default=crypto['Category'].dropna().unique()
+    )
+
+    crypto = crypto[crypto['Category'].isin(selected_category)]
+
+# -------------------------------------------------
+# PAGE NAVIGATION
+# -------------------------------------------------
 
 page = st.sidebar.radio(
-    "Go To",
+    "Navigation",
     [
-        "Dashboard 1",
-        "Dashboard 2",
-        "Dashboard 3",
-        "Dashboard 4",
-        "Dashboard 5",
-        "Dashboard 6",
-        "Dashboard 7",
-        "Dashboard 8",
-        "Dashboard 9",
-        "Dashboard 10",
-        "Dashboard 11",
-        "Dashboard 12"
+        "Executive Overview",
+        "Price Explorer",
+        "Forecasting",
+        "Risk & Volatility",
+        "Forecast Insights",
+        "Sentiment Analysis",
+        "Market Correlation",
+        "Feature Explainability",
+        "Forecast Comparison",
+        "Key Influencers",
+        "Strategy Backtest",
+        "Interactive Explorer"
     ]
 )
 
-# -----------------------------------
-# DASHBOARD 1
-# -----------------------------------
+# -------------------------------------------------
+# PAGE 1
+# -------------------------------------------------
 
-if page == "Dashboard 1":
+if page == "Executive Overview":
 
-    st.title("📈 Sales Dashboard")
+    st.title("📈 Executive Overview")
 
-    df = pd.DataFrame({
-        'Category': ['A', 'B', 'C', 'D'],
-        'Sales': [100, 200, 150, 300]
-    })
+    c1, c2, c3, c4 = st.columns(4)
 
-    c1, c2, c3 = st.columns(3)
+    if 'High' in crypto.columns:
+        c1.metric("Highest Peak Price", f"{crypto['High'].max():,.2f}")
 
-    c1.metric("Total Sales", "₹10,00,000")
-    c2.metric("Profit", "₹2,50,000")
-    c3.metric("Growth", "15%")
+    if 'Close' in crypto.columns:
+        c2.metric("Latest Close Price", f"{crypto['Close'].iloc[-1]:,.2f}")
 
-    fig = px.bar(df, x='Category', y='Sales', title='Sales by Category')
+    if 'Ticker' in crypto.columns:
+        c3.metric("Most Volatile Ticker", str(crypto['Ticker'].mode()[0]))
 
-    st.plotly_chart(fig, use_container_width=True)
+    if 'Close' in crypto.columns:
+        c4.metric("Average Close", f"{crypto['Close'].mean():,.2f}")
 
-    st.dataframe(df)
+    if 'Date' in crypto.columns and 'Close' in crypto.columns:
 
-# -----------------------------------
-# DASHBOARD 2
-# -----------------------------------
+        fig = px.line(
+            crypto,
+            x='Date',
+            y='Close',
+            color='Ticker' if 'Ticker' in crypto.columns else None,
+            title='Average Close Price Over Time'
+        )
 
-elif page == "Dashboard 2":
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.title("📊 Revenue Dashboard")
+# -------------------------------------------------
+# PAGE 2
+# -------------------------------------------------
 
-    df = pd.DataFrame({
-        'Month': ['Jan', 'Feb', 'Mar', 'Apr'],
-        'Revenue': [400, 600, 700, 900]
-    })
+elif page == "Price Explorer":
 
-    fig = px.line(
-        df,
-        x='Month',
-        y='Revenue',
-        markers=True,
-        title="Monthly Revenue"
-    )
+    st.title("📊 Price Explorer & Candlesticks")
 
-    st.plotly_chart(fig, use_container_width=True)
+    if all(col in crypto.columns for col in ['Date','Open','High','Low','Close']):
 
-    st.dataframe(df)
+        fig = go.Figure(data=[go.Candlestick(
+            x=crypto['Date'],
+            open=crypto['Open'],
+            high=crypto['High'],
+            low=crypto['Low'],
+            close=crypto['Close']
+        )])
 
-# -----------------------------------
-# DASHBOARD 3
-# -----------------------------------
+        fig.update_layout(title='Candlestick Chart')
 
-elif page == "Dashboard 3":
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.title("👨‍💼 Employee Dashboard")
+    if 'Volume' in crypto.columns:
 
-    df = pd.DataFrame({
-        'Department': ['HR', 'IT', 'Sales', 'Finance'],
-        'Employees': [20, 45, 30, 15]
-    })
+        fig2 = px.bar(
+            crypto,
+            x='Date',
+            y='Volume',
+            title='Trading Volume'
+        )
 
-    fig = px.pie(
-        df,
-        names='Department',
-        values='Employees',
-        title="Department Employees"
-    )
+        st.plotly_chart(fig2, use_container_width=True)
 
-    st.plotly_chart(fig, use_container_width=True)
+# -------------------------------------------------
+# PAGE 3
+# -------------------------------------------------
 
-# -----------------------------------
-# DASHBOARD 4
-# -----------------------------------
+elif page == "Forecasting":
 
-elif page == "Dashboard 4":
+    st.title("🔮 Forecasting Dashboard")
 
-    st.title("💰 Profit Dashboard")
+    if 'Forecast' in stacked.columns:
 
-    df = pd.DataFrame({
-        'Region': ['North', 'South', 'East', 'West'],
-        'Profit': [250, 300, 150, 400]
-    })
+        fig = px.line(
+            stacked,
+            x='Date',
+            y='Forecast',
+            color='Model' if 'Model' in stacked.columns else None,
+            title='Forecast Comparison'
+        )
 
-    fig = px.bar(
-        df,
-        x='Region',
-        y='Profit',
-        color='Region',
-        title="Profit by Region"
-    )
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.plotly_chart(fig, use_container_width=True)
+    col1, col2, col3 = st.columns(3)
 
-# -----------------------------------
-# DASHBOARD 5
-# -----------------------------------
+    if 'MAE' in stacked.columns:
+        col1.metric("MAE", f"{stacked['MAE'].mean():,.2f}")
 
-elif page == "Dashboard 5":
+    if 'RMSE' in stacked.columns:
+        col2.metric("RMSE", f"{stacked['RMSE'].mean():,.2f}")
 
-    st.title("📦 Orders Dashboard")
+# -------------------------------------------------
+# PAGE 4
+# -------------------------------------------------
 
-    df = pd.DataFrame({
-        'Product': ['P1', 'P2', 'P3', 'P4'],
-        'Orders': [100, 250, 180, 90]
-    })
+elif page == "Risk & Volatility":
 
-    fig = px.funnel(
-        df,
-        x='Orders',
-        y='Product',
-        title="Product Orders Funnel"
-    )
+    st.title("⚠ Risk & Volatility")
 
-    st.plotly_chart(fig, use_container_width=True)
+    if 'Volatility' in crypto.columns:
 
-# -----------------------------------
-# DASHBOARD 6
-# -----------------------------------
+        fig = px.line(
+            crypto,
+            x='Date',
+            y='Volatility',
+            color='Ticker' if 'Ticker' in crypto.columns else None,
+            title='Volatility Trend'
+        )
 
-elif page == "Dashboard 6":
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.title("👥 User Growth Dashboard")
+# -------------------------------------------------
+# PAGE 5
+# -------------------------------------------------
 
-    df = pd.DataFrame({
-        'Date': pd.date_range(start='2025-01-01', periods=10),
-        'Users': [10,20,30,40,50,45,60,70,65,80]
-    })
+elif page == "Forecast Insights":
 
-    fig = px.area(
-        df,
-        x='Date',
-        y='Users',
-        title="User Growth"
-    )
+    st.title("📌 Forecast Insights")
 
-    st.plotly_chart(fig, use_container_width=True)
+    if 'Forecast' in stacked.columns:
 
-# -----------------------------------
-# DASHBOARD 7
-# -----------------------------------
+        fig = px.area(
+            stacked,
+            x='Date',
+            y='Forecast',
+            title='Forecast Growth'
+        )
 
-elif page == "Dashboard 7":
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.title("📌 KPI Dashboard")
+# -------------------------------------------------
+# PAGE 6
+# -------------------------------------------------
 
-    c1, c2, c3 = st.columns(3)
+elif page == "Sentiment Analysis":
 
-    c1.metric("Active Users", "12,450")
-    c2.metric("New Customers", "1,250")
-    c3.metric("Revenue", "₹8,75,000")
+    st.title("📰 Sentiment & News Impact")
 
-# -----------------------------------
-# DASHBOARD 8
-# -----------------------------------
+    if 'Sentiment' in sentiment.columns:
 
-elif page == "Dashboard 8":
+        fig = px.histogram(
+            sentiment,
+            x='Sentiment',
+            color='ImpactLevel' if 'ImpactLevel' in sentiment.columns else None,
+            title='Sentiment Distribution'
+        )
 
-    st.title("🌸 Iris Scatter Dashboard")
+        st.plotly_chart(fig, use_container_width=True)
 
-    df = px.data.iris()
+    if 'source' in sentiment.columns:
 
-    fig = px.scatter(
-        df,
-        x='sepal_width',
-        y='sepal_length',
-        color='species',
-        title="Iris Dataset Scatter Plot"
-    )
+        fig2 = px.bar(
+            sentiment,
+            x='source',
+            y='NewsImpact' if 'NewsImpact' in sentiment.columns else None,
+            title='News Impact by Source'
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True)
 
-# -----------------------------------
-# DASHBOARD 9
-# -----------------------------------
+# -------------------------------------------------
+# PAGE 7
+# -------------------------------------------------
 
-elif page == "Dashboard 9":
+elif page == "Market Correlation":
 
-    st.title("🏆 Team Performance Dashboard")
+    st.title("🔗 Correlations & Market Structure")
 
-    df = pd.DataFrame({
-        'Team': ['A', 'B', 'C'],
-        'Score': [80, 90, 75]
-    })
+    numeric_cols = crypto.select_dtypes(include='number')
 
-    fig = px.bar(
-        df,
-        x='Team',
-        y='Score',
-        title="Team Scores"
-    )
+    corr = numeric_cols.corr()
+
+    fig = px.imshow(corr, text_auto=True)
 
     st.plotly_chart(fig, use_container_width=True)
 
-# -----------------------------------
-# DASHBOARD 10
-# -----------------------------------
+# -------------------------------------------------
+# PAGE 8
+# -------------------------------------------------
 
-elif page == "Dashboard 10":
+elif page == "Feature Explainability":
 
-    st.title("📌 Dashboard 10")
+    st.title("📌 Feature Importance & Explainability")
 
-    st.success("This is Dashboard 10")
+    if 'Close' in crypto.columns and 'Volume' in crypto.columns:
 
-# -----------------------------------
-# DASHBOARD 11
-# -----------------------------------
+        fig = px.scatter(
+            crypto,
+            x='Volume',
+            y='Close',
+            color='Ticker' if 'Ticker' in crypto.columns else None,
+            title='Close vs Volume'
+        )
 
-elif page == "Dashboard 11":
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.title("📌 Dashboard 11")
+# -------------------------------------------------
+# PAGE 9
+# -------------------------------------------------
 
-    st.info("This is Dashboard 11")
+elif page == "Forecast Comparison":
 
-# -----------------------------------
-# DASHBOARD 12
-# -----------------------------------
+    st.title("📊 Forecast Model Comparison")
 
-elif page == "Dashboard 12":
+    if 'Forecast' in stacked.columns:
 
-    st.title("📌 Dashboard 12")
+        fig = px.line(
+            stacked,
+            x='Date',
+            y='Forecast',
+            color='Model' if 'Model' in stacked.columns else None,
+            title='Model Forecasts'
+        )
 
-    st.warning("This is Dashboard 12")
+        st.plotly_chart(fig, use_container_width=True)
 
+# -------------------------------------------------
+# PAGE 10
+# -------------------------------------------------
 
-# -----------------------------------
+elif page == "Key Influencers":
+
+    st.title("⭐ Key Influencers")
+
+    st.dataframe(crypto.describe())
+
+# -------------------------------------------------
+# PAGE 11
+# -------------------------------------------------
+
+elif page == "Strategy Backtest":
+
+    st.title("📈 Strategy Backtest & Performance")
+
+    if 'Daily_Return' in crypto.columns:
+
+        fig = px.line(
+            crypto,
+            x='Date',
+            y='Daily_Return',
+            color='Ticker' if 'Ticker' in crypto.columns else None,
+            title='Daily Returns'
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+# -------------------------------------------------
+# PAGE 12
+# -------------------------------------------------
+
+elif page == "Interactive Explorer":
+
+    st.title("🎯 Interactive Explorer")
+
+    st.dataframe(crypto)
+
+# -------------------------------------------------
 # FOOTER
-# -----------------------------------
+# -------------------------------------------------
 
 st.sidebar.markdown("---")
-st.sidebar.write("Made with ❤️ using Streamlit")
+st.sidebar.info("Power BI Clone using Streamlit")
+```
+
+---
+
+# requirements.txt
+
+```txt
+streamlit
+pandas
+plotly
+numpy
+```
+
+---
+
+# Folder Structure
+
+```bash
+project/
+│
+├── app.py
+├── Cryptofile.csv
+├── Sentiment_2026.csv
+├── Stacked2026.csv
+└── requirements.txt
+```
+
+---
+
+# Run Project
+
+```bash
+streamlit run app.py
+```
+
+---
+
+# GitHub Upload
+
+Upload these files:
+
+* app.py
+* requirements.txt
+* Cryptofile.csv
+* Sentiment_2026.csv
+* Stacked2026.csv
+
+Then deploy on:
+
+[https://streamlit.io/cloud](https://streamlit.io/cloud)
